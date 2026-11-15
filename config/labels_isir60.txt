@@ -1,0 +1,31 @@
+bed
+cabinet
+storage cabinet
+white cabinet
+chair
+clock
+couch
+door
+door frame
+drawer
+framed artwork
+glass door
+handle
+kitchen counter
+oven
+person
+planter
+radiator
+range hood
+refrigerator
+sensor
+shelf
+sneakers
+sphere
+staircase
+table
+television
+vase
+washing machine
+waste bin
+window
