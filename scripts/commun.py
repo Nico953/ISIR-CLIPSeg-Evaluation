@@ -33,12 +33,35 @@ def masques(probs, h, w, norm, seuil, methode):
     """probs (N, 352, 352) -> masques (N, h, w).
     norm=True, seuil=0.9, methode='nearest' reproduit garbage.py."""
     rs = Image.NEAREST if methode == "nearest" else Image.BILINEAR
-    grandes = np.stack([np.array(Image.fromarray(p, mode="F").resize((w, h), rs)) for p in probs])
+    if probs.shape[1:] == (h, w):  # cache deja a la taille de la photo (Grounded-SAM)
+        grandes = probs
+    else:
+        grandes = np.stack([np.array(Image.fromarray(p, mode="F").resize((w, h), rs)) for p in probs])
     if norm:
         mn = probs.min(axis=(1, 2))[:, None, None]
         mx = probs.max(axis=(1, 2))[:, None, None]
         grandes = (grandes - mn) / (mx - mn + 1e-8)
     return grandes > seuil
+
+
+# Variantes de meuble : gardees a l'annotation, fusionnees pour l'evaluation (GT et prompts)
+FUSION = {"white cabinet": "cabinet", "storage cabinet": "cabinet"}
+
+
+def regrouper(labels, pred, gt, h, w):
+    """Applique les regles d'evaluation -> ({categorie: masque predit}, {categorie: masque GT}).
+    Une porte vitree est aussi une porte."""
+    preds, brut = {}, {}
+    for label, p in zip(labels, pred):
+        l = FUSION.get(label, label)
+        preds[l] = preds[l] | p if l in preds else p
+    for label, g in gt.items():
+        l = FUSION.get(label, label)
+        brut[l] = brut[l] | g if l in brut else g
+    vide = np.zeros((h, w), bool)
+    gts = {l: brut.get(l, vide) for l in preds}
+    gts["door"] = gts["door"] | brut.get("glass door", vide)
+    return preds, gts
 
 
 def iou(a, b):

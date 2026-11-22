@@ -10,7 +10,6 @@ door frame
 drawer
 framed artwork
 glass door
-handle
 kitchen counter
 oven
 person
@@ -18,7 +17,6 @@ planter
 radiator
 range hood
 refrigerator
-sensor
 shelf
 sneakers
 sphere

@@ -1,0 +1,42 @@
+--- garbage_original.py	2026-11-17 00:25:02.252977570 +0100
++++ garbage.py	2026-11-17 00:25:06.766129581 +0100
+@@ -14,6 +14,7 @@
+ processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
+ model = CLIPSegForImageSegmentation.from_pretrained("CIDAS/clipseg-rd64-refined")
+ output_folder = 'masks'
++SEUIL = 0.3  # seuil sur la probabilite CLIPSeg (mission 2 : meilleur F1 en mode pipeline, 59 photos ISIR_60)
+ 
+ # LABEL_CREATION_PROMPT = (
+ #     "You're mounted on a mobile robot and looking basically from the ground level a bit up. "
+@@ -67,14 +68,17 @@
+ 
+     now = time()
+     prompts = [p.replace("/", " or ") for p in labels]
++    noms = [p.split(":")[0].strip() for p in prompts]  # CLIPSeg recoit le nom seul ("fridge"), pas la description
+     inputs = processor(
+-        text=prompts, images=[image] * len(prompts), padding=True, return_tensors="pt"
++        text=noms, images=[image] * len(noms), padding=True, return_tensors="pt"
+     )
+     
+     with torch.no_grad():
+         outputs = model(**inputs)
+     
+     logits = outputs.logits  # shape: (num_prompts, H, W)
++    if logits.ndim == 2:  # un seul prompt : CLIPSeg renvoie (H, W)
++        logits = logits.unsqueeze(0)
+     preds = torch.sigmoid(logits)
+     
+     orig_w, orig_h = image.size
+@@ -82,10 +86,8 @@
+     masks_to_save = {}
+     for i, prompt in enumerate(prompts):
+         mask = preds[i].numpy()
+-        # Normalize to 0-1
+-        mask = (mask - mask.min()) / (mask.max() - mask.min() + 1e-8)
+-        # Threshold to binary mask
+-        binary_mask = (mask > 0.9).astype(np.uint8)  # 1 where predicted, 0 elsewhere
++        # Pas de normalisation min-max : elle produisait un masque meme pour un objet absent
++        binary_mask = (mask > SEUIL).astype(np.uint8)  # 1 where predicted, 0 elsewhere
+         # Resize mask to original image size
+         mask_img = Image.fromarray(binary_mask * 255).resize(
+             (orig_w, orig_h),

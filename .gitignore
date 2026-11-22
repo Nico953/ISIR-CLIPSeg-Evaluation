@@ -1,3 +1,5 @@
 data/test/
 cache/
 __pycache__/
+results/erreurs_*/
+results/erreurs_*/

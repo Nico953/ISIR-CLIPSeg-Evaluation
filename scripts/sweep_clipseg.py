@@ -1,29 +1,33 @@
 """Compare les reglages de post-traitement de CLIPSeg sur les photos annotees :
-normalisation min-max (oui/non) x seuil x agrandissement (nearest/bilineaire).
+normalisation min-max (oui/non) x seuil (pas de 0,05).
 La config norm_s0.9_nearest est celle de garbage.py.
 
 Un objet est detecte si projector.py lance au moins un rayon pour lui.
 Une categorie absente de l'annotation est consideree absente de la photo.
 
 python scripts/sweep_clipseg.py cache/nom results/sweep_nom.csv
+python scripts/sweep_clipseg.py cache/nom results/sweep_nom_pipeline.csv --gemma config/gemma_categories_isir60.json
 """
 import argparse
 import csv
 import glob
+import json
 import os
 
 import numpy as np
 
-from commun import colonnes, iou, lire_annotation, lire_labels, masques
+from commun import FUSION, colonnes, iou, lire_annotation, lire_labels, masques, regrouper
 
 ap = argparse.ArgumentParser()
 ap.add_argument("cache")
 ap.add_argument("sortie")
+ap.add_argument("--gemma", help="mode pipeline : ne garder que les categories citees par Gemma")
 a = ap.parse_args()
 
 labels = lire_labels("config/labels_isir60.txt")
-configs = [(n, s, m) for n in (True, False) for s in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
-           for m in ("nearest", "bilineaire")]
+demandes = json.load(open(a.gemma, encoding="utf-8")) if a.gemma else None
+# l'agrandissement bilineaire ne changeait rien : seul nearest est garde
+configs = [(n, round(s, 2), "nearest") for n in (True, False) for s in np.arange(0.05, 0.96, 0.05)]
 stats = {c: {"TP": 0, "FP": 0, "FN": 0, "TN": 0, "iou_2d": [], "iou_col": []} for c in configs}
 
 n_images = 0
@@ -36,8 +40,12 @@ for f in sorted(glob.glob(os.path.join("data/annotations", "*.json"))):
     for c in configs:
         pred = masques(probs, h, w, *c)
         st = stats[c]
-        for label, p in zip(labels, pred):
-            g = gt.get(label, np.zeros((h, w), bool))
+        preds, gts = regrouper(labels, pred, gt, h, w)
+        if demandes is not None:
+            cites = {FUSION.get(x, x) for x in demandes[nom]}
+            preds = {x: p if x in cites else np.zeros_like(p) for x, p in preds.items()}
+        for label, p in preds.items():
+            g = gts[label]
             g_col, p_col = colonnes(g), colonnes(p)
             if g_col.any():
                 st["TP" if p_col.any() else "FN"] += 1
